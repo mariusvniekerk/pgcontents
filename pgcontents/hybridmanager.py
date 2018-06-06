@@ -234,9 +234,13 @@ class HybridContentsManager(ContentsManager):
             model = self.__get(old_path, content=True)
             model.pop('path', None)
             model.pop('name', None)
-            saved_model = self.save(new_path, model)
+            self.save(path=new_path, model=model)
+            if model['type'] == 'directory':
+                for c in model['content']:
+                    old_child = old_path + '/' + c['name']
+                    new_child = new_path + '/' + c['name']
+                    self.rename(old_child, new_child, *args, **kwargs)
             self.__delete(old_path)
-
 
     __get = path_dispatch1('get', True)
     __delete = path_dispatch1('delete', False)
