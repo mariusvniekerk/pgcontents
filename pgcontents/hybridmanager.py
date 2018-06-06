@@ -130,6 +130,10 @@ def path_dispatch_kwarg(mname, path_default, returns_model):
     return _wrapper
 
 
+class MismatchedBackendException(HTTPError):
+    pass
+
+
 def path_dispatch_old_new(mname, returns_model):
     """
     Decorator for methods accepting old_path and new_path.
@@ -143,7 +147,7 @@ def path_dispatch_old_new(mname, returns_model):
         )
         if old_mgr is not new_mgr:
             # TODO: Consider supporting this via get+delete+save.
-            raise HTTPError(
+            raise MismatchedBackendException(
                 400,
                 "Can't move files between backends ({old} -> {new})".format(
                     old=old_path,
@@ -220,7 +224,19 @@ class HybridContentsManager(ContentsManager):
     exists = path_dispatch1('exists', False)
 
     save = path_dispatch2('save', 'model', True)
-    rename = path_dispatch_old_new('rename', False)
+    _rename = path_dispatch_old_new('rename', False)
+
+    def rename(self, old_path, new_path, *args, **kwargs):
+        try:
+            self._rename(old_path, new_path, *args, **kwargs)
+        except MismatchedBackendException:
+            # Specialized handling doing a a get, put, delete
+            model = self.__get(old_path, content=True)
+            model.pop('path', None)
+            model.pop('name', None)
+            saved_model = self.save(new_path, model)
+            self.__delete(old_path)
+
 
     __get = path_dispatch1('get', True)
     __delete = path_dispatch1('delete', False)
